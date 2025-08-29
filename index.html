@@ -1,3 +1,16 @@
+<script type="module">
+  import { getProfile } from "https://aipipe.org/aipipe.js";
+
+  const { token, email } = getProfile();
+  // Only auto-fill if token exists, but do NOT redirect if missing
+  document.addEventListener("DOMContentLoaded", () => {
+    const tokenInput = document.querySelector('input[name="api_key"]');
+    if (tokenInput && token) {
+      tokenInput.value = token;
+    }
+    // If no token, user can manually paste their token in the input field
+  });
+</script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
