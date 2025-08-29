@@ -4,6 +4,7 @@ import os
 import re
 import time
 import base64
+import requests  # <-- Added for AI Pipe support
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, UploadFile, Form, HTTPException
@@ -194,6 +195,41 @@ async def build_slide_plan_with_retry(
     assert last_err is not None
     raise last_err
 
+# ---------- AI Pipe call function ----------
+def call_aipipe(api_key, model_name, messages, max_tokens=1000):
+    """
+    Calls AI Pipe's OpenRouter-compatible API for generating completions.
+    """
+    url = "https://aipipe.org/openrouter/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key.strip()}",
+    }
+
+    body = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.7
+    }
+
+    response = requests.post(url, headers=headers, json=body)
+    if response.status_code != 200:
+        raise RuntimeError(f"AI Pipe error {response.status_code}: {response.text}")
+
+    data = response.json()
+
+    # Safely extract message content
+    try:
+        content = data["choices"][0]["message"]["content"]
+        slides = json.loads(content)
+        if "slides" not in slides:
+            raise ValueError("No slides array in AI Pipe response")
+        return slides
+    except Exception:
+        # Fallback: If AI Pipe sends plain text instead of JSON
+        return {"slides": [{"title": "Generated Deck", "bullets": [content]}]}
+
 async def build_slide_plan(
     text: str,
     guidance: str,
@@ -210,13 +246,16 @@ async def build_slide_plan(
     )
 
     instruction = _llm_instruction(text, guidance, target_slides)
+    messages = [{"role": "user", "content": instruction}]
 
-    if provider in ("openai", "aipipe"):
+    if provider == "aipipe":
+        # Use direct AI Pipe call, do NOT use response_format
+        return call_aipipe(api_key, model_name, messages)
+
+    if provider == "openai":
         if OpenAI is None:
             raise RuntimeError("openai package not installed. `pip install openai`")
         client_kwargs = {"api_key": api_key}
-        if provider == "aipipe":
-            client_kwargs["base_url"] = "https://aipipe.org/openai/v1"
         client = OpenAI(**client_kwargs)
         resp = client.responses.create(
             model=model_name,
@@ -235,7 +274,7 @@ async def build_slide_plan(
             model=model_name,
             max_tokens=2048,
             system="Return ONLY valid JSON. No explanations. No code fences.",
-            messages=[{"role": "user", "content": instruction}],
+            messages=messages,
             temperature=0.2,
         )
         text_out = "".join(
