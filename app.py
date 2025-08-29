@@ -260,7 +260,7 @@ async def build_slide_plan(
         resp = client.responses.create(
             model=model_name,
             input=[{"role": "user", "content": instruction}],
-            response_format={"type": "json_object"},
+    
             temperature=0.2,
         )
         content = _extract_openai_output_text(resp)
@@ -653,3 +653,4 @@ def _fit_into_box(img: Dict[str, int], box: Dict[str, int]) -> Dict[str, int]:
     nl = box["left"] + (bw - nw) // 2
     nt = box["top"] + (bh - nh) // 2
     return _rect(nl, nt, nw, nh)
+
